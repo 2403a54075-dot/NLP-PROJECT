@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>🌐 Ultra YouTube Comments Analyzer</title>
+
+<style>
+body {
+    font-family: 'Segoe UI';
+    background: linear-gradient(135deg,#141e30,#243b55);
+    color: white;
+    padding: 20px;
+}
+
+h1 { text-align: center; }
+
+.container {
+    background: rgba(255,255,255,0.1);
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+input, select, button {
+    padding: 10px;
+    margin: 5px;
+    border-radius: 8px;
+    border: none;
+}
+
+button {
+    background: #00c6ff;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+button:hover { background: #00aaff; }
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    color: black;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 10px;
+}
+
+th { background: #222; color: white; }
+
+.card {
+    background: white;
+    color: black;
+    padding: 15px;
+    margin-top: 10px;
+    border-radius: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>🌐 Multi-Language YouTube Analyzer</h1>
+
+<div class="container">
+
+<input type="text" id="url" placeholder="Enter YouTube URL" size="40">
+
+<select id="order">
+<option value="relevance">⬆ Popular</option>
+<option value="time">⬇ Latest</option>
+</select>
+
+<select id="lang"></select>
+
+<input type="number" id="limit" value="20" min="5" max="200">
+
+<br>
+
+<button onclick="translateMode()">🌐 Translate</button>
+<button onclick="analyzeMode()">📊 Analyze</button>
+
+</div>
+
+<div id="output"></div>
+
+<script>
+
+const API_KEY = "YOUR_API_KEY_HERE";
+
+// ================= LANGUAGE LIST =================
+const languages = [
+["af","Afrikaans"],["ar","Arabic"],["bn","Bengali"],
+["zh-cn","Chinese"],["en","English"],["fr","French"],
+["de","German"],["hi","Hindi"],["it","Italian"],
+["ja","Japanese"],["kn","Kannada"],["ko","Korean"],
+["ml","Malayalam"],["mr","Marathi"],["ne","Nepali"],
+["pt","Portuguese"],["ru","Russian"],["es","Spanish"],
+["ta","Tamil"],["te","Telugu"],["tr","Turkish"],
+["ur","Urdu"],["vi","Vietnamese"]
+];
+
+// Populate dropdown (A-Z)
+let langSelect = document.getElementById("lang");
+languages.sort((a,b)=>a[1].localeCompare(b[1]));
+languages.forEach(l=>{
+    let opt = document.createElement("option");
+    opt.value = l[0];
+    opt.textContent = l[1];
+    langSelect.appendChild(opt);
+});
+
+// Extract Video ID
+function getVideoId(url){
+    let match = url.match(/(?:v=|youtu\.be\/)([0-9A-Za-z_-]{11})/);
+    return match ? match[1] : null;
+}
+
+// Fetch comments
+async function fetchComments(videoId, order, limit){
+    let comments = [];
+    let token = "";
+
+    while(comments.length < limit){
+        let api = `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=100&order=${order}&key=${API_KEY}&pageToken=${token}`;
+        let res = await fetch(api);
+        let data = await res.json();
+
+        data.items.forEach(item=>{
+            let s = item.snippet.topLevelComment.snippet;
+            comments.push({
+                text: s.textDisplay,
+                likes: s.likeCount,
+                replies: item.snippet.totalReplyCount
+            });
+        });
+
+        token = data.nextPageToken;
+        if(!token) break;
+    }
+
+    return comments.slice(0,limit);
+}
+
+// Translate
+async function translate(text, lang){
+    try{
+        let url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${lang}&dt=t&q=${encodeURIComponent(text)}`;
+        let res = await fetch(url);
+        let data = await res.json();
+        return data[0][0][0];
+    }catch{
+        return "Error";
+    }
+}
+
+// ================= TRANSLATE MODE =================
+async function translateMode(){
+
+    let output = document.getElementById("output");
+    output.innerHTML = "⏳ Translating...";
+
+    let videoId = getVideoId(document.getElementById("url").value);
+    let order = document.getElementById("order").value;
+    let lang = document.getElementById("lang").value;
+    let limit = document.getElementById("limit").value;
+
+    if(!videoId){
+        output.innerHTML = "❌ Invalid URL";
+        return;
+    }
+
+    let comments = await fetchComments(videoId, order, limit);
+
+    let table = `<table>
+    <tr>
+        <th>Original</th>
+        <th>Translated</th>
+        <th>👍 Likes</th>
+        <th>💬 Replies</th>
+    </tr>`;
+
+    for(let c of comments){
+        let t = await translate(c.text, lang);
+        table += `<tr>
+        <td>${c.text}</td>
+        <td>${t}</td>
+        <td>${c.likes}</td>
+        <td>${c.replies}</td>
+        </tr>`;
+    }
+
+    table += "</table>";
+    output.innerHTML = table;
+}
+
+// ================= ANALYZE MODE =================
+async function analyzeMode(){
+
+    let output = document.getElementById("output");
+    output.innerHTML = "⏳ Analyzing...";
+
+    let videoId = getVideoId(document.getElementById("url").value);
+    let order = document.getElementById("order").value;
+    let limit = document.getElementById("limit").value;
+
+    if(!videoId){
+        output.innerHTML = "❌ Invalid URL";
+        return;
+    }
+
+    let comments = await fetchComments(videoId, order, limit);
+
+    let totalLikes = 0;
+    let totalReplies = 0;
+
+    comments.forEach(c=>{
+        totalLikes += c.likes;
+        totalReplies += c.replies;
+    });
+
+    output.innerHTML = `
+    <div class="card">
+    <h3>📊 Analysis Result</h3>
+    <p>Total Comments: ${comments.length}</p>
+    <p>Total Likes: ${totalLikes}</p>
+    <p>Total Replies: ${totalReplies}</p>
+    <p>Average Likes: ${(totalLikes/comments.length).toFixed(2)}</p>
+    </div>`;
+}
+
+</script>
+
+</body>
+</html>
